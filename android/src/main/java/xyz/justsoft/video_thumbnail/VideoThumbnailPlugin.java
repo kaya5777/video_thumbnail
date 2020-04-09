@@ -1,27 +1,16 @@
 package xyz.justsoft.video_thumbnail;
 
-import android.content.ContentResolver;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Matrix;
-import android.graphics.Rect;
-import android.media.ExifInterface;
 import android.media.MediaMetadataRetriever;
-import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.ParcelFileDescriptor;
-import android.provider.MediaStore;
 import android.util.Log;
 
-import java.io.FileInputStream;
-import java.io.FileDescriptor;
-import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
-import java.util.Map;
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -56,7 +45,7 @@ public class VideoThumbnailPlugin implements MethodCallHandler {
         final int format = (int) args.get("format");
         final int maxh = (int) args.get("maxh");
         final int maxw = (int) args.get("maxw");
-        final int timeMs = (int) args.get("timeMs");
+        final int timeUs = (int) args.get("timeUs");
         final int quality = (int) args.get("quality");
         final String method = call.method;
 
@@ -70,11 +59,11 @@ public class VideoThumbnailPlugin implements MethodCallHandler {
                 try {
                     if (method.equals("file")) {
                         final String path = (String) args.get("path");
-                        thumbnail = buildThumbnailFile(video, path, format, maxh, maxw, timeMs, quality);
+                        thumbnail = buildThumbnailFile(video, path, format, maxh, maxw, timeUs, quality);
                         handled = true;
 
                     } else if (method.equals("data")) {
-                        thumbnail = buildThumbnailData(video, format, maxh, maxw, timeMs, quality);
+                        thumbnail = buildThumbnailData(video, format, maxh, maxw, timeUs, quality);
                         handled = true;
                     }
                 } catch (Exception e) {
@@ -88,32 +77,32 @@ public class VideoThumbnailPlugin implements MethodCallHandler {
 
     private static Bitmap.CompressFormat intToFormat(int format) {
         switch (format) {
-        default:
-        case 0:
-            return Bitmap.CompressFormat.JPEG;
-        case 1:
-            return Bitmap.CompressFormat.PNG;
-        case 2:
-            return Bitmap.CompressFormat.WEBP;
+            default:
+            case 0:
+                return Bitmap.CompressFormat.JPEG;
+            case 1:
+                return Bitmap.CompressFormat.PNG;
+            case 2:
+                return Bitmap.CompressFormat.WEBP;
         }
     }
 
     private static String formatExt(int format) {
         switch (format) {
-        default:
-        case 0:
-            return new String("jpg");
-        case 1:
-            return new String("png");
-        case 2:
-            return new String("webp");
+            default:
+            case 0:
+                return new String("jpg");
+            case 1:
+                return new String("png");
+            case 2:
+                return new String("webp");
         }
     }
 
-    private byte[] buildThumbnailData(String vidPath, int format, int maxh, int maxw, int timeMs, int quality) {
-        Log.d(TAG, String.format("buildThumbnailData( format:%d, maxh:%d, maxw:%d, timeMs:%d, quality:%d )", format,
-                maxh, maxw, timeMs, quality));
-        Bitmap bitmap = createVideoThumbnail(vidPath, maxh, maxw, timeMs);
+    private byte[] buildThumbnailData(String vidPath, int format, int maxh, int maxw, int timeUs, int quality) {
+        Log.d(TAG, String.format("buildThumbnailData( format:%d, maxh:%d, maxw:%d, timeUs:%d, quality:%d )", format,
+                maxh, maxw, timeUs, quality));
+        Bitmap bitmap = createVideoThumbnail(vidPath, maxh, maxw, timeUs);
         if (bitmap == null)
             throw new NullPointerException();
 
@@ -125,11 +114,11 @@ public class VideoThumbnailPlugin implements MethodCallHandler {
         return stream.toByteArray();
     }
 
-    private String buildThumbnailFile(String vidPath, String path, int format, int maxh, int maxw, int timeMs,
-            int quality) {
-        Log.d(TAG, String.format("buildThumbnailFile( format:%d, maxh:%d, maxw:%d, timeMs:%d, quality:%d )", format,
-                maxh, maxw, timeMs, quality));
-        final byte bytes[] = buildThumbnailData(vidPath, format, maxh, maxw, timeMs, quality);
+    private String buildThumbnailFile(String vidPath, String path, int format, int maxh, int maxw, int timeUs,
+                                      int quality) {
+        Log.d(TAG, String.format("buildThumbnailFile( format:%d, maxh:%d, maxw:%d, timeUs:%d, quality:%d )", format,
+                maxh, maxw, timeUs, quality));
+        final byte bytes[] = buildThumbnailData(vidPath, format, maxh, maxw, timeUs, quality);
         final String ext = formatExt(format);
         final int i = vidPath.lastIndexOf(".");
         String fullpath = vidPath.substring(0, i + 1) + ext;
@@ -193,7 +182,7 @@ public class VideoThumbnailPlugin implements MethodCallHandler {
      * @param targetH the max height of the thumbnail
      * @param targetW the max width of the thumbnail
      */
-    public static Bitmap createVideoThumbnail(String video, int targetH, int targetW, int timeMs) {
+    public static Bitmap createVideoThumbnail(String video, int targetH, int targetW, int timeUs) {
         Bitmap bitmap = null;
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
@@ -207,9 +196,9 @@ public class VideoThumbnailPlugin implements MethodCallHandler {
             if (targetH != 0 || targetW != 0) {
                 if (android.os.Build.VERSION.SDK_INT >= 27 && targetH != 0 && targetW != 0) {
                     // API Level 27
-                    bitmap = retriever.getScaledFrameAtTime(timeMs * 1000, 0, targetW, targetH);
+                    bitmap = retriever.getScaledFrameAtTime(timeUs, 0, targetW, targetH);
                 } else {
-                    bitmap = retriever.getFrameAtTime(timeMs * 1000);
+                    bitmap = retriever.getFrameAtTime(timeUs);
                     if (bitmap != null) {
                         int width = bitmap.getWidth();
                         int height = bitmap.getHeight();
@@ -224,7 +213,7 @@ public class VideoThumbnailPlugin implements MethodCallHandler {
                     }
                 }
             } else {
-                bitmap = retriever.getFrameAtTime(timeMs * 1000);
+                bitmap = retriever.getFrameAtTime(timeUs);
             }
         } catch (IllegalArgumentException ex) {
             ex.printStackTrace();
